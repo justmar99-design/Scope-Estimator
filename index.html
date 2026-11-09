@@ -1,0 +1,532 @@
+<!DOCTYPE html>
+<html lang="en" class="bg-slate-950">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#020617">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>Field Scope Estimator</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+  html, body { -webkit-tap-highlight-color: transparent; }
+  body { font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  input { font-size: 16px !important; } /* prevents iOS zoom on focus */
+  .tap { transition: transform .12s ease, box-shadow .2s ease, border-color .2s ease, background-color .2s ease; }
+  .tap:active { transform: scale(.97); }
+  .pop { animation: pop .28s ease; }
+  @keyframes pop { 0%{transform:scale(1)} 35%{transform:scale(.95)} 100%{transform:scale(1)} }
+  .bump { animation: bump .3s ease; }
+  @keyframes bump { 0%{transform:scale(1)} 40%{transform:scale(1.12); color:#34d399} 100%{transform:scale(1)} }
+  .shake { animation: shake .35s ease; }
+  @keyframes shake { 0%,100%{transform:translateX(0)} 25%{transform:translateX(-6px)} 75%{transform:translateX(6px)} }
+
+  /* Add-on selected state */
+  .addon.is-on { border-color:#10B981; background:rgba(16,185,129,.08); box-shadow:0 0 0 2px #10B981, 0 10px 28px -10px rgba(16,185,129,.55); }
+  .addon.is-on .check { background:#10B981; border-color:#10B981; color:#020617; }
+  .addon.is-on .icon { background:rgba(16,185,129,.16); color:#34d399; }
+  .addon.is-on .badge { background:#10B981; color:#020617; border-color:#10B981; }
+
+  /* Deposit switch */
+  #depositToggle.is-on { border-color:#10B981; background:rgba(16,185,129,.08); box-shadow:0 0 0 2px #10B981; }
+  #depositToggle .track { transition: background-color .2s ease; }
+  #depositToggle .knob { transition: transform .2s ease; }
+  #depositToggle.is-on .track { background:#10B981; }
+  #depositToggle.is-on .knob { transform: translateX(24px); }
+
+  #overlay.show { opacity:1; pointer-events:auto; }
+  #overlay.show .sheet { transform: translateY(0); }
+</style>
+</head>
+<body class="bg-slate-950 text-white antialiased min-h-screen">
+
+<main class="max-w-xl mx-auto px-4" style="padding-top: calc(env(safe-area-inset-top) + 16px)">
+
+  <!-- Header -->
+  <header class="flex items-center justify-between mb-5">
+    <div>
+      <p class="text-[11px] font-semibold uppercase tracking-[.2em] text-emerald-400">Website Build Proposal</p>
+      <h1 class="text-xl font-extrabold tracking-tight">Scope Estimator</h1>
+    </div>
+    <div class="text-right">
+      <p id="today" class="text-xs text-slate-400"></p>
+      <p id="draftStatus" class="text-[11px] text-slate-500 mt-0.5">Draft auto-saves</p>
+    </div>
+  </header>
+
+  <!-- Business Basics -->
+  <section class="rounded-2xl border border-slate-800 bg-slate-900/50 p-4 mb-6">
+    <h2 class="text-xs font-bold uppercase tracking-widest text-slate-400 mb-3">Business Basics</h2>
+    <div class="grid grid-cols-2 gap-3">
+      <label class="col-span-2 block">
+        <span class="text-xs text-slate-400">Business Name</span>
+        <input data-field="businessName" type="text" autocomplete="organization" placeholder="e.g. Apex Peak Roofing"
+          class="mt-1 w-full h-12 rounded-xl bg-slate-950 border border-slate-700 px-3 text-white placeholder-slate-600 focus:outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/30">
+      </label>
+      <label class="col-span-2 block">
+        <span class="text-xs text-slate-400">Owner Name</span>
+        <input data-field="ownerName" type="text" autocomplete="name" placeholder="First & last"
+          class="mt-1 w-full h-12 rounded-xl bg-slate-950 border border-slate-700 px-3 text-white placeholder-slate-600 focus:outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/30">
+      </label>
+      <label class="block">
+        <span class="text-xs text-slate-400">Cell Phone</span>
+        <input data-field="phone" type="tel" inputmode="tel" autocomplete="tel" placeholder="(555) 555-5555"
+          class="mt-1 w-full h-12 rounded-xl bg-slate-950 border border-slate-700 px-3 text-white placeholder-slate-600 focus:outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/30">
+      </label>
+      <label class="block">
+        <span class="text-xs text-slate-400">Email</span>
+        <input data-field="email" type="email" inputmode="email" autocomplete="email" autocapitalize="off" placeholder="name@company.com"
+          class="mt-1 w-full h-12 rounded-xl bg-slate-950 border border-slate-700 px-3 text-white placeholder-slate-600 focus:outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/30">
+      </label>
+      <label class="col-span-2 block">
+        <span class="text-xs text-slate-400">City / Primary Service Radius</span>
+        <input data-field="serviceArea" type="text" placeholder="e.g. Vaughan + 35 km"
+          class="mt-1 w-full h-12 rounded-xl bg-slate-950 border border-slate-700 px-3 text-white placeholder-slate-600 focus:outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/30">
+      </label>
+    </div>
+  </section>
+
+  <!-- Section 1: Core -->
+  <section class="mb-6">
+    <div class="flex items-baseline justify-between mb-3">
+      <h2 class="text-xs font-bold uppercase tracking-widest text-slate-400">1 · Core Foundation</h2>
+      <span class="text-[11px] text-emerald-400 font-semibold">Included</span>
+    </div>
+    <div class="rounded-2xl border border-emerald-500 bg-emerald-500/[.06] p-4 shadow-[0_0_0_2px_#10B981,0_10px_28px_-12px_rgba(16,185,129,.5)]">
+      <div class="flex items-start gap-3">
+        <span class="shrink-0 grid place-items-center w-11 h-11 rounded-xl bg-emerald-500/15 text-emerald-400">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" class="w-6 h-6"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 9h18M7 6.5h.01M10 6.5h.01"/></svg>
+        </span>
+        <div class="flex-1 min-w-0">
+          <div class="flex items-start justify-between gap-2">
+            <h3 class="font-bold leading-snug">Core High-Converting Website</h3>
+            <span class="shrink-0 grid place-items-center w-7 h-7 rounded-full bg-emerald-500 text-slate-950">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 018 0v4"/></svg>
+            </span>
+          </div>
+          <p class="mt-1 text-sm"><span class="font-bold text-emerald-400">$500 setup</span> <span class="text-slate-400">+ $49/mo</span></p>
+        </div>
+      </div>
+      <ul class="mt-3 grid grid-cols-1 gap-1.5 text-sm text-slate-300">
+        <li class="flex gap-2"><span class="text-emerald-400">✓</span>Custom single-page responsive design</li>
+        <li class="flex gap-2"><span class="text-emerald-400">✓</span>Click-to-call mobile header & bottom bar</li>
+        <li class="flex gap-2"><span class="text-emerald-400">✓</span>Dedicated service showcase sections</li>
+        <li class="flex gap-2"><span class="text-emerald-400">✓</span>Standard quote capture form</li>
+        <li class="flex gap-2"><span class="text-emerald-400">✓</span>Handcrafted verified Google reviews cards</li>
+        <li class="flex gap-2"><span class="text-emerald-400">✓</span>High-speed cloud hosting & SSL certificate</li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- Section 2: Add-ons -->
+  <section class="mb-6">
+    <div class="flex items-baseline justify-between mb-3">
+      <h2 class="text-xs font-bold uppercase tracking-widest text-slate-400">2 · Add-On Features (100% Self-Contained)</h2>
+      <span id="addonCount" class="text-[11px] text-slate-500 font-semibold">Tap to add</span>
+    </div>
+    <div id="addons" class="grid grid-cols-1 gap-3"></div>
+  </section>
+
+  <!-- Deposit -->
+  <section class="mb-6">
+    <h2 class="text-xs font-bold uppercase tracking-widest text-slate-400 mb-3">3 · Lock It In</h2>
+    <button id="depositToggle" type="button" role="switch" aria-checked="false"
+      class="tap w-full min-h-[72px] flex items-center justify-between gap-4 rounded-2xl border border-slate-800 bg-slate-900/60 p-4 text-left">
+      <span>
+        <span class="block font-bold">Collect 50% Deposit Today</span>
+        <span class="block text-sm text-slate-400">Reserves build queue. Balance due upon live domain launch.</span>
+      </span>
+      <span class="track relative shrink-0 w-14 h-8 rounded-full bg-slate-700">
+        <span class="knob absolute top-1 left-1 w-6 h-6 rounded-full bg-white shadow"></span>
+      </span>
+    </button>
+    <div id="depositPanel" class="hidden mt-3 rounded-2xl border border-emerald-500/40 bg-emerald-500/10 p-4">
+      <div class="flex items-end justify-between">
+        <div>
+          <p class="text-[11px] font-bold uppercase tracking-widest text-emerald-400">Due Today</p>
+          <p id="depositBig" class="text-4xl font-extrabold text-emerald-400 tabular-nums">$0</p>
+        </div>
+        <div class="text-right text-sm text-slate-300">
+          <p>Balance at launch</p>
+          <p id="balanceBig" class="font-bold text-white tabular-nums">$0</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <p class="text-center text-[11px] text-slate-600 mb-4">Saved on this device only · No server</p>
+</main>
+
+<!-- Sticky Closing HUD -->
+<div id="hud" class="fixed inset-x-0 bottom-0 z-40 border-t border-slate-800 bg-slate-950/95 backdrop-blur-xl"
+  style="padding-bottom: calc(env(safe-area-inset-bottom) + 12px)">
+  <div class="max-w-xl mx-auto px-4 pt-3">
+    <div class="grid grid-cols-3 gap-2 text-center">
+      <div class="rounded-xl bg-slate-900 border border-slate-800 py-1.5">
+        <p class="text-[10px] uppercase tracking-wider text-slate-500 flex items-center justify-center gap-1">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="w-3 h-3"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 018 0v4"/></svg>Base
+        </p>
+        <p class="font-bold tabular-nums">$500</p>
+      </div>
+      <div class="rounded-xl bg-slate-900 border border-slate-800 py-1.5">
+        <p class="text-[10px] uppercase tracking-wider text-slate-500">Add-ons</p>
+        <p id="hudAddons" class="font-bold tabular-nums">$0</p>
+      </div>
+      <div class="rounded-xl bg-slate-900 border border-slate-800 py-1.5">
+        <p class="text-[10px] uppercase tracking-wider text-slate-500">Hosting</p>
+        <p class="font-bold tabular-nums">$49<span class="text-xs text-slate-400 font-medium">/mo</span></p>
+      </div>
+    </div>
+    <div class="flex items-end justify-between mt-2.5">
+      <div>
+        <p class="text-[11px] uppercase tracking-wider text-slate-400">Total Setup</p>
+        <p id="hudTotal" class="text-3xl font-extrabold tabular-nums leading-none inline-block">$500</p>
+      </div>
+      <div id="hudDepositWrap" class="text-right hidden">
+        <p class="text-[11px] uppercase tracking-wider text-emerald-400 font-bold">50% Due Today</p>
+        <p id="hudDeposit" class="text-2xl font-extrabold text-emerald-400 tabular-nums leading-none inline-block">$250</p>
+      </div>
+    </div>
+    <button id="lockBtn" type="button"
+      class="tap mt-3 w-full min-h-[56px] rounded-2xl bg-emerald-500 text-slate-950 font-extrabold text-lg flex items-center justify-center gap-2 shadow-[0_10px_30px_-10px_rgba(16,185,129,.8)]">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="w-5 h-5"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 018 0v4"/></svg>
+      Lock Scope & Save
+    </button>
+  </div>
+</div>
+
+<!-- Confirmation Overlay -->
+<div id="overlay" class="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm opacity-0 pointer-events-none transition-opacity duration-200 flex items-end sm:items-center justify-center">
+  <div class="sheet w-full max-w-xl max-h-[92vh] overflow-y-auto rounded-t-3xl sm:rounded-3xl bg-slate-900 border border-slate-800 p-5 translate-y-8 transition-transform duration-200"
+    style="padding-bottom: calc(env(safe-area-inset-bottom) + 20px)">
+    <div class="flex flex-col items-center text-center">
+      <span class="grid place-items-center w-14 h-14 rounded-full bg-emerald-500 text-slate-950 mb-3">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" class="w-7 h-7"><path d="M5 13l4 4L19 7"/></svg>
+      </span>
+      <h2 class="text-2xl font-extrabold">Scope Locked</h2>
+      <p id="ovRef" class="text-xs text-slate-500 mt-1"></p>
+      <p id="ovCopy" class="text-sm mt-2"></p>
+    </div>
+    <div id="ovBody" class="mt-5"></div>
+    <div class="mt-5 grid grid-cols-2 gap-3">
+      <button id="copyAgainBtn" type="button" class="tap min-h-[52px] rounded-2xl border border-slate-700 bg-slate-800 font-semibold">Copy Again</button>
+      <a id="smsBtn" href="#" class="tap min-h-[52px] rounded-2xl border border-slate-700 bg-slate-800 font-semibold grid place-items-center">Text to Client</a>
+      <button id="editBtn" type="button" class="tap col-span-2 min-h-[52px] rounded-2xl border border-slate-700 font-semibold text-slate-300">Back to Edit</button>
+      <button id="newClientBtn" type="button" class="tap col-span-2 min-h-[56px] rounded-2xl bg-emerald-500 text-slate-950 font-extrabold text-lg">Start New Client</button>
+    </div>
+  </div>
+</div>
+
+<!-- Toast -->
+<div id="toast" class="fixed left-1/2 -translate-x-1/2 top-4 z-[60] rounded-full bg-white text-slate-950 text-sm font-semibold px-4 py-2 shadow-lg opacity-0 pointer-events-none transition-opacity duration-200"></div>
+
+<script>
+(() => {
+  const BASE = 500, HOSTING = 49;
+  const KEY_DRAFT = 'fse_draft_v2', KEY_LOG = 'fse_saved_v2';
+
+  const ICONS = {
+    calc: '<rect x="5" y="2" width="14" height="20" rx="2"/><path d="M8 6h8M8 11h.01M12 11h.01M16 11h.01M8 15h.01M12 15h.01M16 15h.01M8 19h.01M12 19h4"/>',
+    bot: '<path d="M12 2a2 2 0 0 1 2 2v2a2 2 0 0 1-2 2 2 2 0 0 1-2-2V4a2 2 0 0 1 2-2zM4 11a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-7z"/><circle cx="9" cy="14" r="1.5"/><circle cx="15" cy="14" r="1.5"/>',
+    crm: '<rect x="3" y="3" width="7" height="9" rx="1"/><rect x="14" y="3" width="7" height="5" rx="1"/><rect x="14" y="12" width="7" height="9" rx="1"/><rect x="3" y="16" width="7" height="5" rx="1"/>',
+    email: '<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 7l9 6 9-6"/>',
+    slider: '<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M12 4v16M8 10l-2 2 2 2M16 10l2 2-2 2"/>',
+    calendar: '<rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18M8 14h.01M12 14h.01M16 14h.01M8 18h.01M12 18h.01"/>',
+    alert: '<polygon points="7.86 2 16.14 2 22 7.86 22 16.14 16.14 22 7.86 22 2 16.14 2 7.86 7.86 2"/><path d="M12 8v4M12 16h.01"/>',
+    check: '<path d="M5 13l4 4L19 7"/>'
+  };
+
+  // The 7 Final Zero-Setup Modular Features
+  const FEATURES = [
+    { id:'estimator', icon:'calc',     price:200, title:'Interactive Rough Cost Estimator',   pitch:'Sliders for size & job type that give ballpark prices and qualify real buyers.' },
+    { id:'leadbot',   icon:'bot',      price:175, title:'Guided 24/7 Lead-Capture Bot',      pitch:'Floating chat window with quick buttons that grabs after-hours quotes ($0 API).' },
+    { id:'crm',       icon:'crm',      price:250, title:'Private Owner Lead CRM (/admin)',   pitch:'Mobile dashboard on your phone to track incoming quotes and 1-tap call clients.' },
+    { id:'dispatch',  icon:'email',    price:100, title:'Instant Email Lead Dispatch Alert',  pitch:'Beeps your phone inbox within 5 seconds of form submission with 1-tap call.' },
+    { id:'slider',    icon:'slider',   price:150, title:'Interactive Before & After Slider', pitch:'Interactive touch-to-drag photo reveal proving your craftsmanship visually.' },
+    { id:'scheduler', icon:'calendar', price:150, title:'Inspection Date & Time Scheduler',  pitch:'Customer selects arrival window (Morning/Afternoon/Evening) directly in the quote form.' },
+    { id:'emergency', icon:'alert',    price:100, title:'Emergency Fast-Track Alert Banner', pitch:'Pulsing header alert banner with instant 1-tap call for high-ticket emergency leaks.' }
+  ];
+
+  const blankState = () => ({
+    client: { businessName:'', ownerName:'', phone:'', email:'', serviceArea:'' },
+    selected: [],
+    deposit: false
+  });
+
+  const $ = (s) => document.querySelector(s);
+  const svg = (k, cls) => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" class="${cls}">${ICONS[k]}</svg>`;
+  const money = (n) => '$' + Number(n).toLocaleString('en-US', { minimumFractionDigits: n % 1 ? 2 : 0, maximumFractionDigits: 2 });
+  const esc = (s) => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  const buzz = () => { try { navigator.vibrate && navigator.vibrate(12); } catch(e){} };
+
+  // ---------- Storage ----------
+  const store = {
+    get(k, fb) { try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : fb; } catch(e) { return fb; } },
+    set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); return true; } catch(e) { return false; } }
+  };
+
+  let state = Object.assign(blankState(), store.get(KEY_DRAFT, {}));
+  state.client = Object.assign(blankState().client, state.client || {});
+  state.selected = Array.isArray(state.selected) ? state.selected.filter(id => FEATURES.some(f => f.id === id)) : [];
+  let lastRecord = null;
+
+  function saveDraft() {
+    const ok = store.set(KEY_DRAFT, state);
+    const t = new Date().toLocaleTimeString([], { hour:'numeric', minute:'2-digit' });
+    $('#draftStatus').textContent = ok ? `Draft saved ${t}` : 'Storage unavailable';
+  }
+
+  // ---------- Totals ----------
+  function totals() {
+    const items = FEATURES.filter(f => state.selected.includes(f.id));
+    const addons = items.reduce((s, f) => s + f.price, 0);
+    const total = BASE + addons;
+    const deposit = Math.round(total * 50) / 100;
+    return { items, addons, total, deposit, balance: total - deposit };
+  }
+
+  // ---------- Render ----------
+  function renderAddons() {
+    $('#addons').innerHTML = FEATURES.map(f => `
+      <button type="button" data-id="${f.id}" aria-pressed="false"
+        class="addon tap w-full min-h-[64px] text-left flex items-start gap-3 rounded-2xl border border-slate-800 bg-slate-900/60 p-4">
+        <span class="icon shrink-0 grid place-items-center w-11 h-11 rounded-xl bg-slate-800 text-slate-300 transition-colors">${svg(f.icon,'w-6 h-6')}</span>
+        <span class="flex-1 min-w-0">
+          <span class="flex items-start justify-between gap-2">
+            <span class="font-bold leading-snug">${f.title}</span>
+            <span class="badge shrink-0 rounded-full px-2.5 py-1 text-xs font-extrabold bg-slate-800 text-emerald-400 border border-slate-700 transition-colors tabular-nums">+$${f.price}</span>
+          </span>
+          <span class="block mt-1 text-sm text-slate-400 leading-snug">${f.pitch}</span>
+        </span>
+        <span class="check shrink-0 grid place-items-center w-7 h-7 rounded-full border-2 border-slate-700 text-transparent mt-0.5 transition-colors">${svg('check','w-4 h-4')}</span>
+      </button>`).join('');
+  }
+
+  let prev = { addons: null, total: null, deposit: null };
+  function bump(el, key, val) {
+    if (prev[key] !== null && prev[key] !== val) { el.classList.remove('bump'); void el.offsetWidth; el.classList.add('bump'); }
+    prev[key] = val;
+  }
+
+  function paint() {
+    document.querySelectorAll('.addon').forEach(el => {
+      const on = state.selected.includes(el.dataset.id);
+      el.classList.toggle('is-on', on);
+      el.setAttribute('aria-pressed', on);
+    });
+    const t = totals();
+    $('#hudAddons').textContent = money(t.addons);
+    $('#hudTotal').textContent = money(t.total);
+    $('#hudDeposit').textContent = money(t.deposit);
+    $('#depositBig').textContent = money(t.deposit);
+    $('#balanceBig').textContent = money(t.balance);
+    bump($('#hudAddons'), 'addons', t.addons);
+    bump($('#hudTotal'), 'total', t.total);
+    bump($('#hudDeposit'), 'deposit', t.deposit);
+
+    const n = t.items.length;
+    $('#addonCount').textContent = n ? `${n} selected` : 'Tap to add';
+    $('#addonCount').className = 'text-[11px] font-semibold ' + (n ? 'text-emerald-400' : 'text-slate-500');
+
+    const dt = $('#depositToggle');
+    dt.classList.toggle('is-on', state.deposit);
+    dt.setAttribute('aria-checked', state.deposit);
+    $('#depositPanel').classList.toggle('hidden', !state.deposit);
+    $('#hudDepositWrap').classList.toggle('hidden', !state.deposit);
+    fitHud();
+  }
+
+  function fillInputs() {
+    document.querySelectorAll('[data-field]').forEach(inp => { inp.value = state.client[inp.dataset.field] || ''; });
+  }
+
+  function fitHud() {
+    document.body.style.paddingBottom = ($('#hud').offsetHeight + 20) + 'px';
+  }
+
+  // ---------- Manifest ----------
+  function buildRecord() {
+    const now = new Date();
+    const p = (n) => String(n).padStart(2, '0');
+    const ref = `FS-${now.getFullYear()}${p(now.getMonth()+1)}${p(now.getDate())}-${p(now.getHours())}${p(now.getMinutes())}`;
+    const t = totals();
+    return {
+      ref, createdAt: now.toISOString(),
+      client: { ...state.client },
+      features: t.items.map(f => ({ id: f.id, title: f.title, price: f.price })),
+      base: BASE, addons: t.addons, total: t.total, hosting: HOSTING,
+      depositToday: state.deposit, deposit: state.deposit ? t.deposit : 0,
+      balance: state.deposit ? t.balance : t.total
+    };
+  }
+
+  function manifest(r) {
+    const d = (v) => (v && String(v).trim()) || '—';
+    const line = '────────────────────';
+    const when = new Date(r.createdAt).toLocaleString('en-US', { dateStyle:'medium', timeStyle:'short' });
+    const out = [
+      'WEBSITE BUILD — SCOPE MANIFEST',
+      `Ref: ${r.ref}`,
+      `Date: ${when}`,
+      line,
+      'CLIENT',
+      `Business: ${d(r.client.businessName)}`,
+      `Owner: ${d(r.client.ownerName)}`,
+      `Phone: ${d(r.client.phone)}`,
+      `Email: ${d(r.client.email)}`,
+      `Service Area: ${d(r.client.serviceArea)}`,
+      line,
+      'CORE FOUNDATION (included)',
+      `• Core High-Converting Website — ${money(r.base)} setup + ${money(r.hosting)}/mo`,
+      '  Custom single-page design, click-to-call mobile header & bar, services showcase,',
+      '  quote form, verified Google reviews grid, SSL & hosting',
+      '',
+      'UPGRADES (100% Self-Contained)'
+    ];
+    if (r.features.length) r.features.forEach(f => out.push(`• ${f.title} — +${money(f.price)}`));
+    else out.push('• None selected');
+    out.push(line,
+      `Base Setup: ${money(r.base)}`,
+      `Add-ons: ${money(r.addons)}`,
+      `TOTAL SETUP: ${money(r.total)}`,
+      `Hosting: ${money(r.hosting)}/mo`
+    );
+    if (r.depositToday) out.push(`DEPOSIT DUE TODAY (50%): ${money(r.deposit)}`, `Balance at launch: ${money(r.balance)}`);
+    else out.push('Deposit: not collected today');
+    return out.join('\n');
+  }
+
+  async function copyText(text) {
+    try {
+      if (navigator.clipboard && window.isSecureContext) { await navigator.clipboard.writeText(text); return true; }
+    } catch(e) {}
+    try {
+      const ta = document.createElement('textarea');
+      ta.value = text; ta.setAttribute('readonly', '');
+      Object.assign(ta.style, { position:'fixed', top:'-1000px', opacity:'0', fontSize:'16px' });
+      document.body.appendChild(ta);
+      ta.select(); ta.setSelectionRange(0, text.length);
+      const ok = document.execCommand('copy');
+      ta.remove();
+      return ok;
+    } catch(e) { return false; }
+  }
+
+  // ---------- Overlay ----------
+  function setCopyStatus(ok) {
+    const el = $('#ovCopy');
+    el.textContent = ok ? '✓ Scope manifest copied to clipboard' : "Couldn't auto-copy — tap Copy Again";
+    el.className = 'text-sm mt-2 font-semibold ' + (ok ? 'text-emerald-400' : 'text-amber-400');
+  }
+
+  function showOverlay(r, copied) {
+    $('#ovRef').textContent = `${r.ref} · saved to this phone`;
+    setCopyStatus(copied);
+    const c = r.client;
+    const row = (k, v) => `<div class="flex justify-between gap-3 py-1"><span class="text-slate-400">${k}</span><span class="text-right font-medium break-all">${esc(v || '—')}</span></div>`;
+    const feats = r.features.length
+      ? r.features.map(f => `<li class="flex justify-between gap-3 py-1"><span>${esc(f.title)}</span><span class="tabular-nums text-slate-300">+${money(f.price)}</span></li>`).join('')
+      : '<li class="py-1 text-slate-500">No upgrades selected</li>';
+    $('#ovBody').innerHTML = `
+      <div class="rounded-2xl bg-slate-950 border border-slate-800 p-4 text-sm">
+        <p class="text-base font-bold">${esc(c.businessName || 'Unnamed business')}</p>
+        ${row('Owner', c.ownerName)}${row('Phone', c.phone)}${row('Email', c.email)}${row('Area', c.serviceArea)}
+      </div>
+      <div class="rounded-2xl bg-slate-950 border border-slate-800 p-4 text-sm mt-3">
+        <div class="flex justify-between gap-3 py-1 font-semibold"><span>Core High-Converting Website</span><span class="tabular-nums">${money(r.base)}</span></div>
+        <ul class="border-t border-slate-800 mt-1 pt-1">${feats}</ul>
+        <div class="border-t border-slate-800 mt-2 pt-2 space-y-1">
+          <div class="flex justify-between"><span class="text-slate-400">Add-ons</span><span class="tabular-nums">${money(r.addons)}</span></div>
+          <div class="flex justify-between text-lg font-extrabold"><span>Total Setup</span><span class="tabular-nums">${money(r.total)}</span></div>
+          <div class="flex justify-between"><span class="text-slate-400">Hosting</span><span class="tabular-nums">${money(r.hosting)}/mo</span></div>
+        </div>
+      </div>
+      ${r.depositToday ? `
+      <div class="rounded-2xl bg-emerald-500/10 border border-emerald-500 p-4 mt-3 text-center">
+        <p class="text-[11px] font-bold uppercase tracking-widest text-emerald-400">Deposit Due Today (50%)</p>
+        <p class="text-5xl font-extrabold text-emerald-400 tabular-nums mt-1">${money(r.deposit)}</p>
+        <p class="text-sm text-slate-300 mt-1">Balance at launch: <span class="font-bold text-white">${money(r.balance)}</span></p>
+      </div>` : `
+      <div class="rounded-2xl bg-slate-950 border border-slate-800 p-4 mt-3 text-center text-sm text-slate-400">No deposit collected today · ${money(r.total)} due at launch</div>`}
+    `;
+    const sms = $('#smsBtn');
+    const phone = (c.phone || '').replace(/[^\d+]/g, '');
+    if (phone) { sms.href = `sms:${phone}?&body=${encodeURIComponent(manifest(r))}`; sms.classList.remove('opacity-40','pointer-events-none'); }
+    else { sms.href = '#'; sms.classList.add('opacity-40','pointer-events-none'); }
+    $('#overlay').classList.add('show');
+    document.body.style.overflow = 'hidden';
+  }
+
+  function hideOverlay() {
+    $('#overlay').classList.remove('show');
+    document.body.style.overflow = '';
+  }
+
+  function toast(msg) {
+    const t = $('#toast');
+    t.textContent = msg; t.style.opacity = '1';
+    clearTimeout(toast._t); toast._t = setTimeout(() => t.style.opacity = '0', 1800);
+  }
+
+  // ---------- Events ----------
+  $('#addons').addEventListener('click', (e) => {
+    const btn = e.target.closest('.addon'); if (!btn) return;
+    const id = btn.dataset.id;
+    state.selected = state.selected.includes(id) ? state.selected.filter(x => x !== id) : [...state.selected, id];
+    btn.classList.remove('pop'); void btn.offsetWidth; btn.classList.add('pop');
+    buzz(); paint(); saveDraft();
+  });
+
+  $('#depositToggle').addEventListener('click', () => { state.deposit = !state.deposit; buzz(); paint(); saveDraft(); });
+
+  document.querySelectorAll('[data-field]').forEach(inp => {
+    inp.addEventListener('input', () => { state.client[inp.dataset.field] = inp.value; saveDraft(); });
+  });
+
+  $('#lockBtn').addEventListener('click', async () => {
+    const nameInput = document.querySelector('[data-field="businessName"]');
+    if (!state.client.businessName.trim()) {
+      toast('Add the business name first');
+      nameInput.classList.remove('shake'); void nameInput.offsetWidth; nameInput.classList.add('shake');
+      nameInput.focus({ preventScroll: true });
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+      return;
+    }
+    buzz();
+    const r = buildRecord();
+    lastRecord = r;
+    saveDraft();
+    const log = store.get(KEY_LOG, []);
+    log.unshift(r);
+    store.set(KEY_LOG, log.slice(0, 100));
+    const copied = await copyText(manifest(r));
+    showOverlay(r, copied);
+  });
+
+  $('#copyAgainBtn').addEventListener('click', async () => {
+    if (!lastRecord) return;
+    const ok = await copyText(manifest(lastRecord));
+    setCopyStatus(ok); if (ok) toast('Copied'); buzz();
+  });
+
+  $('#editBtn').addEventListener('click', hideOverlay);
+  $('#overlay').addEventListener('click', (e) => { if (e.target.id === 'overlay') hideOverlay(); });
+
+  $('#newClientBtn').addEventListener('click', () => {
+    state = blankState();
+    lastRecord = null;
+    prev = { addons: null, total: null, deposit: null };
+    saveDraft(); fillInputs(); paint(); hideOverlay();
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+    toast('Ready for next client');
+  });
+
+  window.addEventListener('resize', fitHud);
+
+  // ---------- Init ----------
+  $('#today').textContent = new Date().toLocaleDateString('en-US', { weekday:'short', month:'short', day:'numeric', year:'numeric' });
+  renderAddons(); fillInputs(); paint();
+})();
+</script>
+</body>
+</html>
